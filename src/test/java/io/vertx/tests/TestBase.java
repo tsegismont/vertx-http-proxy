@@ -14,11 +14,7 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Handler;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
-import io.vertx.core.http.HttpClient;
-import io.vertx.core.http.HttpClientOptions;
-import io.vertx.core.http.HttpServer;
-import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.http.*;
 import io.vertx.core.net.NetServer;
 import io.vertx.core.net.NetSocket;
 import io.vertx.core.net.SocketAddress;
@@ -34,6 +30,7 @@ import org.junit.runner.RunWith;
 import java.io.Closeable;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * @author <a href="mailto:julien@julienviet.com">Julien Viet</a>
@@ -72,6 +69,10 @@ public abstract class TestBase {
   }
 
   protected Closeable startProxy(Consumer<HttpProxy> config) {
+    return startProxy(config, Function.identity());
+  }
+
+  protected Closeable startProxy(Consumer<HttpProxy> config, Function<HttpProxy, ? extends Handler<HttpServerRequest>> proxyRequestHandler) {
     CompletableFuture<Closeable> res = new CompletableFuture<>();
     vertx.deployVerticle(new AbstractVerticle() {
       HttpClient proxyClient;
@@ -83,7 +84,7 @@ public abstract class TestBase {
         proxyServer = vertx.createHttpServer(new HttpServerOptions(serverOptions));
         proxy = HttpProxy.reverseProxy(proxyOptions, proxyClient);
         config.accept(proxy);
-        proxyServer.requestHandler(proxy);
+        proxyServer.requestHandler(proxyRequestHandler.apply(proxy));
         proxyServer.listen().onComplete(ar -> startFuture.handle(ar.mapEmpty()));
       }
     }).onComplete(ar -> {

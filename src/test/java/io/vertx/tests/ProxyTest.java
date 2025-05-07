@@ -231,4 +231,32 @@ public class ProxyTest extends ProxyTestBase {
       )
       .onComplete(ctx.asyncAssertSuccess(buffer -> ctx.assertEquals("HOLA", buffer.toString())));
   }
+
+  @Test
+  public void testInitialAttachment(TestContext ctx) {
+    SocketAddress backend = startHttpBackend(ctx, 8081, req -> req.response().end("HOLA"));
+    ProxyInterceptor interceptor = new ProxyInterceptor() {
+      @Override
+      public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+        ctx.assertEquals("bar", context.get("foo", String.class));
+        context.set("foo", "baz");
+        return context.sendRequest();
+      }
+    };
+    OriginRequestProvider provider = (proxyContext, client) -> {
+      ctx.assertEquals("baz", proxyContext.get("foo", String.class));
+      return client.request(new RequestOptions().setServer(backend));
+    };
+    startProxy(proxy -> proxy.origin(provider).addInterceptor(interceptor), httpProxy -> {
+      return request -> httpProxy.handle(request, Map.of("foo", "bar"));
+    });
+    client = vertx.createHttpClient();
+    client
+      .request(HttpMethod.GET, 8080, "localhost", "/")
+      .compose(req -> req
+        .send()
+        .compose(HttpClientResponse::body)
+      )
+      .onComplete(ctx.asyncAssertSuccess(buffer -> ctx.assertEquals("HOLA", buffer.toString())));
+  }
 }

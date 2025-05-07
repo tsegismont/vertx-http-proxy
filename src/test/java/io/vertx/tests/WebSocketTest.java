@@ -21,6 +21,8 @@ import io.vertx.httpproxy.*;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.Map;
+
 /**
  * @author <a href="mailto:julien@julienviet.com">Julien Viet</a>
  */
@@ -179,6 +181,46 @@ public class WebSocketTest extends ProxyTestBase {
       return client.request(new RequestOptions().setServer(backend));
     };
     startProxy(proxy -> proxy.origin(provider).addInterceptor(interceptor, true));
+    wsClient = vertx.createWebSocketClient();
+    WebSocketConnectOptions options = new WebSocketConnectOptions()
+      .setPort(8080)
+      .setHost("localhost")
+      .setURI("/ws");
+    wsClient.connect(options).onComplete(ctx.asyncAssertSuccess(ws -> {
+      ws.write(Buffer.buffer("ping"));
+      ws.handler(buff -> {
+        ws.close();
+      });
+    }));
+  }
+
+  @Test
+  public void testInitialAttachment(TestContext ctx) {
+    Async async = ctx.async();
+    SocketAddress backend = startHttpBackend(ctx, 8081, req -> {
+      Future<ServerWebSocket> fut = req.toWebSocket();
+      fut.onComplete(ctx.asyncAssertSuccess(ws -> {
+        ws.handler(buff -> ws.write(buff));
+        ws.closeHandler(v -> {
+          async.complete();
+        });
+      }));
+    });
+    ProxyInterceptor interceptor = new ProxyInterceptor() {
+      @Override
+      public Future<ProxyResponse> handleProxyRequest(ProxyContext context) {
+        ctx.assertEquals("bar", context.get("foo", String.class));
+        context.set("foo", "baz");
+        return context.sendRequest();
+      }
+    };
+    OriginRequestProvider provider = (proxyContext, client) -> {
+      ctx.assertEquals("baz", proxyContext.get("foo", String.class));
+      return client.request(new RequestOptions().setServer(backend));
+    };
+    startProxy(proxy -> proxy.origin(provider).addInterceptor(interceptor, true), httpProxy -> {
+      return request -> httpProxy.handle(request, Map.of("foo", "bar"));
+    });
     wsClient = vertx.createWebSocketClient();
     WebSocketConnectOptions options = new WebSocketConnectOptions()
       .setPort(8080)

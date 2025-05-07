@@ -21,6 +21,7 @@ import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.httpproxy.impl.ReverseProxy;
 
+import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -152,6 +153,17 @@ public interface HttpProxy extends Handler<HttpServerRequest> {
    *
    * @param request the outbound {@code HttpServerRequest}
    */
-  void handle(HttpServerRequest request);
+  default void handle(HttpServerRequest request) {
+    handle(request, null);
+  }
+
+  /**
+   * Like {@link #handle(HttpServerRequest)}, with initial attachments.
+   *
+   * @param request the outbound {@code HttpServerRequest}
+   * @param attachments initial set of key/values pairs attached to the {@link ProxyContext}
+   * @see ProxyContext#set(String, Object)
+   */
+  void handle(HttpServerRequest request, Map<String, Object> attachments);
 
 }

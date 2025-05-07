@@ -71,7 +71,7 @@ public class ReverseProxy implements HttpProxy {
   }
 
   @Override
-  public void handle(HttpServerRequest request) {
+  public void handle(HttpServerRequest request, Map<String, Object> attachments) {
     ProxyRequest proxyRequest = ProxyRequest.reverseProxy(request);
 
     // Encoding sanity check
@@ -82,7 +82,7 @@ public class ReverseProxy implements HttpProxy {
     }
 
     boolean isWebSocket = supportWebSocket && request.canUpgradeToWebSocket();
-    Proxy proxy = new Proxy(proxyRequest, isWebSocket);
+    Proxy proxy = new Proxy(proxyRequest, isWebSocket, attachments);
     proxy.sendRequest()
       .recover(throwable -> {
         log.trace("Error in sending the request", throwable);
@@ -117,10 +117,13 @@ public class ReverseProxy implements HttpProxy {
     private final ListIterator<ProxyInterceptorEntry> filters;
     private final boolean isWebSocket;
 
-    private Proxy(ProxyRequest request, boolean isWebSocket) {
+    private Proxy(ProxyRequest request, boolean isWebSocket, Map<String, Object> attachments) {
       this.request = request;
       this.isWebSocket = isWebSocket;
       this.filters = interceptors.listIterator();
+      if (attachments != null) {
+        this.attachments.putAll(attachments);
+      }
     }
 
     @Override
