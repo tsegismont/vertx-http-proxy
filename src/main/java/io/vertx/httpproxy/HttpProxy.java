@@ -18,7 +18,6 @@ import io.vertx.core.Handler;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.http.HttpServerRequest;
-import io.vertx.core.http.RequestOptions;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.httpproxy.impl.ReverseProxy;
 
@@ -58,10 +57,12 @@ public interface HttpProxy extends Handler<HttpServerRequest> {
    *
    * @param address the {@code SocketAddress} of the <i><b>origin</b></i>
    * @return a reference to this, so the API can be used fluently
+   * @deprecated as of Vert.x 5.0, use {@link #origin(OriginRequestProvider)}
    */
+  @Deprecated
   @Fluent
   default HttpProxy origin(SocketAddress address) {
-    return originSelector(req -> Future.succeededFuture(address));
+    return origin(OriginRequestProvider.fixedAddress(address));
   }
 
   /**
@@ -70,10 +71,12 @@ public interface HttpProxy extends Handler<HttpServerRequest> {
    * @param port the port number of the <i><b>origin</b></i> server
    * @param host the host name of the <i><b>origin</b></i> server
    * @return a reference to this, so the API can be used fluently
+   * @deprecated as of Vert.x 5.0, use {@link #origin(OriginRequestProvider)}
    */
+  @Deprecated
   @Fluent
   default HttpProxy origin(int port, String host) {
-    return origin(SocketAddress.inetSocketAddress(port, host));
+    return origin(OriginRequestProvider.fixedAddress(port, host));
   }
 
   /**
@@ -81,12 +84,12 @@ public interface HttpProxy extends Handler<HttpServerRequest> {
    *
    * @param selector the selector
    * @return a reference to this, so the API can be used fluently
+   * @deprecated as of Vert.x 5.0, use {@link #origin(OriginRequestProvider)}
    */
+  @Deprecated
   @Fluent
   default HttpProxy originSelector(Function<HttpServerRequest, Future<SocketAddress>> selector) {
-    return originRequestProvider((req, client) -> selector
-      .apply(req)
-      .flatMap(server -> client.request(new RequestOptions().setServer(server))));
+    return origin(OriginRequestProvider.selector(proxyContext -> selector.apply(proxyContext.request().proxiedRequest())));
   }
 
   /**
@@ -95,10 +98,28 @@ public interface HttpProxy extends Handler<HttpServerRequest> {
    *
    * @param provider the provider
    * @return a reference to this, so the API can be used fluently
+   * @deprecated as of Vert.x 5.0, use {@link #origin(OriginRequestProvider)}
    */
-  @GenIgnore()
+  @Deprecated
+  @GenIgnore
   @Fluent
-  HttpProxy originRequestProvider(BiFunction<HttpServerRequest, HttpClient, Future<HttpClientRequest>> provider);
+  default HttpProxy originRequestProvider(BiFunction<HttpServerRequest, HttpClient, Future<HttpClientRequest>> provider) {
+    return origin(new OriginRequestProvider() {
+      @Override
+      public Future<HttpClientRequest> create(ProxyContext proxyContext, HttpClient client) {
+        return provider.apply(proxyContext.request().proxiedRequest(), client);
+      }
+    });
+  }
+
+  /**
+   * Set a provider that creates the request to the <i><b>origin</b></i> server based on {@link ProxyContext}.
+   *
+   * @param provider the provider
+   * @return a reference to this, so the API can be used fluently
+   */
+  @Fluent
+  HttpProxy origin(OriginRequestProvider provider);
 
   /**
    * Add an interceptor to the interceptor chain.
